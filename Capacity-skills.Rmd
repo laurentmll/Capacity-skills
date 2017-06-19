@@ -1,0 +1,81 @@
+---
+title: "Capacity"
+author: "Laurent Mell, Jean-Baptiste Pressac, Nicolas Deporte, Margot Beauchamps"
+date: "17 juin 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r knitr_init, echo=FALSE, results="asis", cache=FALSE}
+library(knitr)
+```
+
+### Définir la localisation du répertoire de travail 
+
+```{r getwd()}
+getwd()
+```
+
+### Importation et visualisation du jeu de données
+
+```{r read.table}
+capacity <- read.table("capacity_data_r1.csv", header=TRUE, row.names=1, sep=",", check.names=FALSE, fileEncoding="latin1")
+View(capacity)
+capacity<-capacity[-which(rownames(capacity)=="1059"),]
+# Suppression de l'individu 1059 qui pose problème (que des `rdr` en réponse aux questions concernant les `skills`)
+```
+
+### Construire des sous-populations `Usagers d'internet` et `Non-usagers d'internet`
+
+```{r subset}
+library (questionr)
+internaute <- subset(capacity, internaute == "oui")
+non.internaute <- subset(capacity, internaute == "non")
+View(internaute)
+View(non.internaute)
+```
+
+### ACM avec les `skills` de la sous-population `ìnternaute`
+
+```{r MCA skills internaute}
+library(FactoMineR)
+skills.mca <- MCA(internaute[,218:238])
+summary(skills.mca)
+```
+
+### AFM avec les `skills` de la sous-population `ìnternaute`
+
+```{r MFA skills internaute}
+skills.mfa <- MFA(internaute[,218:238], group=c(4,5,4,4,4), type=c("n","n","n","n","n"), ncp=5, name.group=c("Compétences opérationnelles","Compétences informationnelles","Compétences sociales","Compétences créatives","Compétences mobiles"))
+summary(skills.mfa)
+```
+
+### Amélioration graphique de l'AFM avec les `skills` de la sous-population `ìnternaute`
+
+```{r plot(afcpcsregion)}
+plot(skills.mfa, cex = 0.6, cex.axis = 0.6, cex.lab = 0.8, title = "Compétences numériques")
+```  
+
+### Histogramme des valeurs propres pour `MFA skills internaute`
+
+```{r barplot(skills internaute)}
+barplot(skills.mfa$eig[,1], main="Histogramme des valeurs propres", sub = "Représentations des compétences numériques", xlab = "Axes", ylab = "Pourcentage d'inertie",
+        cex.axis = 0.8, cex.names = 0.8, col ="orange",names.arg = 1:nrow(skills.mfa$eig))
+```
+
+
+
+
+
+
+
+
+
+
+
+
