@@ -1,0 +1,355 @@
+---
+title: "Capacity Skills"
+author: "Laurent Mell, Jean-Baptiste Pressac"
+date: "21 septembre 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r knitr_init, echo=FALSE, results="asis", cache=FALSE}
+library(knitr)
+```
+
+```{r library, include=FALSE}
+library(readr)
+library(questionr)
+library(FactoMineR)
+library(Factoshiny)
+library(explor)
+library(ade4)
+library(JLutils)
+library(missMDA)
+library(ggplot2)
+library(factoextra)
+```
+
+### Définir la localisation du répertoire de travail 
+
+```{r getwd(), include=FALSE}
+getwd()
+```
+
+### Importation et visualisation des jeux de données
+
+```{r read.table}
+capacity <- read.csv("capacity_data_r1.csv", header=TRUE, row.names=1, check.names=FALSE, fileEncoding="latin1") # Importation du jeu de données "capacity"
+capacity<-capacity[-which(rownames(capacity)=="1059"),]
+# Suppression de l'individu 1059 qui pose problème (que des `rdr` en réponse aux questions concernant les `skills`)
+```
+
+### Liste de l'ensemble des variables (jeu de données `capacity`)
+
+```{r names capacity}
+names(capacity)
+```
+
+### Construire des sous-populations `Usagers d'internet` et `Non-usagers d'internet` pour les 2 jeux de données
+
+```{r subset}
+# Pour le jeu de données "capacity"
+internaute <- subset(capacity, internaute == "oui")
+non.internaute <- subset(capacity, internaute == "non")
+```
+
+### ACM avec les `skills` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MCA skills internaute}
+skills.mca <- MCA(internaute[,c(1,3,4,283,284,286,287,218:238)], quali.sup=c(1:6), quanti.sup=c(7), graph = FALSE) # ACM avec le sexe, l'âge, la profession, le revenu du ménage, le niveau d'étude, la situation familiale et la taille du foyer en variables qualitative supplémentaires
+summary(skills.mca)
+plot(skills.mca, cex=0.7, title = "ACM des compétences numériques")
+plot(skills.mca, invisible = c("var"), cex=0.7, title="Graphe des individus actifs")
+plot(skills.mca, invisible = c("var"), cex=0.7, title="Graphe des individus actifs", select="contrib 10")
+plot(skills.mca, invisible = c("ind"), cex=0.7, autoLab="y", title="Graphe des modalités actives")
+plot(skills.mca, invisible = c("ind"), cex=0.7, autoLab="y", title="Graphe des modalités actives", selectMod="contrib 10")
+```
+
+### ACM avec les `skills` de la sous-population `ìnternaute` avec le package `ade4` sur le jeu de données `capacity`
+
+```{r MCA ade4 skills internaute}
+skills.mcaade4 <- dudi.acm(droplevels(internaute[,c(218:238)]), scannf = FALSE, nf = 5) # ACM (Je crois que "droplevels()" supprime les cellules vides)
+screeplot(skills.mcaade4) # Graphique de valeurs propres
+summary(skills.mcaade4)
+s.corcircle(skills.mcaade4$co, 1, 2, clabel = 0.7) # représentation du cercle de corrélation des modalités
+s.label(skills.mcaade4$co, clabel = 0.7) # Représentation des modalités sur le plan factoriel
+s.label(skills.mcaade4$li, clabel = 0, pch = 17) # représentation des individus sur le plan factoriel
+s.freq(skills.mcaade4$li) # représentation des individus sur le plan factoriel (où chaque point est proportionnel au nombre d'individus)
+```
+
+J'ai refais la même ACM mais avec un autre package `ade4`. C'est toujours illisible. Par contre, ce qui est intéressant de faire (dernier graphe affiché), c'est de représenter des individus sur le plan factoriel (où chaque point est proportionnel au nombre d'individus). Ça c'est cool.
+
+### AFM avec les `skills` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MFA skills internaute}
+skills.mfa <- MFA(internaute[,c(1,3,4,283,284,286,218:238)], group = c(1,1,1,1,1,1,4,5,4,4,4), type=rep("n",11), ncp = 5, name.group = c("Sexe","Age","Profession","Niveau de vie","Niveau d'études", "Statut familial", "Comp. opérationnelles","Comp. informationnelles","Comp. sociales","Comp. créatives","Comp. mobiles"), num.group.sup = c(1,2,3,4,5,6), graph = FALSE) # AFM avec le sexe, l'âge, la profession, le revenu du ménage, le niveau d'étude et la situation familiale en variables qualitatives supplémentaires
+summary(skills.mfa, ncp=3)
+plot(skills.mfa, cex = 0.6, cex.axis = 0.8, cex.lab = 0.8, title = "AFM des compétences numériques")
+plot(skills.mfa, choix = "group", cex = 0.7, autoLab = "y", shadow = TRUE, title = "Graphe des groupes de variables")
+plot(skills.mfa, choix = "axes", cex = 0.7, shadow = TRUE,  select = "contrib 10", title = "Graphe des axes partiels") # Essayer de supprimer la légende
+plot(skills.mfa, choix = "ind", invisible = c("quali"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mfa, invisible = c("ind"), cex=0.6, autoLab="y", shadow = TRUE, title="Graphe des modalités actives")
+barplot(skills.mfa$eig[,1], sub = "AFM des compétences numériques", xlab = "Axes", ylab = "Pourcentage d'inertie", cex.axis = 0.6, cex.names = 0.6, col = "orange", names.arg = 1:nrow(skills.mfa$eig), main = "Histogramme des valeurs propres")
+```
+
+Du fait que les groupes de variables `Compétences sociales`, `Compétences mobiles`, `Compétences informationnelles` et `Compétences opérationnelles` soient élevés et proches sur les dimensions 1 et 2 signifient que les individus disposant de ces compétences ont une "structure" proche.
+On voit, par ailleurs, que les variables qualitatives supplémentaires sont toutes très proches du profil moyen. Rien à en tirer.
+Par ailleurs, j'ai refais la même AFM en disposant le groupe de variables `Compétences créatives` en illustratif.
+ * skills.mfa02 <- MFA(internaute[,218:238], group=c(4,5,4,4,4), type=c(rep("n",5), ncp=5, name.group=c("Compétences opérationnelles","Compétences informationnelles","Compétences sociales","Compétences créatives","Compétences mobiles"), num.group.sup=c(4))
+ * summary(skills.mfa02)
+En définissant le groupe de variables `Compétences créatives` en illustratif, ça ne change rien à la composition du graphe.
+Du coup, j'ai essayé de faire une AFM sur la même base en supprimant le groupe de variables `Compétences créatives`, on arrive au même résultat.
+ * skills.mfa03 <- MFA(internaute[,c(218:238)], group=c(4,5,4,4), type=c(rep("n",5), ncp=4, name.group=c("Compétences opérationnelles","Compétences informationnelles","Compétences sociales","Compétences mobiles"))
+ * summary(skills.mfa03)
+En supprimant les variables composants le groupe `Compétences numériques`, nous remarquons à quel point ce dernier ne participe que peu à la construction des axes du graphe. Là aussi, ça ne change rien.
+
+### ACM avec les `Compétences opérationnelles` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MCA skills opérationnelles internaute}
+skills.mca01 <- MCA(internaute[,218:221], graph = FALSE)
+summary(skills.mca01)
+# Amélioration des graphes
+plot(skills.mca01, cex = 0.7)
+plot(skills.mca01, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca01, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod="contrib 10", title="Graphe des modalités")
+plot(skills.mca01, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM avec les `Compétences informationnelles` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MCA skills informationnelles internaute}
+skills.mca02 <- MCA(internaute[,222:226], graph = FALSE)
+summary(skills.mca02)
+# Amélioration des graphes
+plot(skills.mca02, cex = 0.7)
+plot(skills.mca02, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca02, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod="contrib 10", title="Graphe des modalités")
+plot(skills.mca02, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM avec les `Compétences sociales` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MCA skills sociales internaute}
+skills.mca03 <- MCA(internaute[,227:230], graph = FALSE)
+summary(skills.mca03)
+# Amélioration des graphes
+plot(skills.mca03, cex = 0.7)
+plot(skills.mca03, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca03, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod="contrib 10", title="Graphe des modalités")
+plot(skills.mca03, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM avec les `Compétences mobiles` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MCA skills mobiles internaute}
+skills.mca04 <- MCA(internaute[,231:234], graph = FALSE)
+summary(skills.mca04)
+# Amélioration des graphes
+plot(skills.mca04, cex = 0.7)
+plot(skills.mca04, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca04, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod="contrib 10", title="Graphe des modalités")
+plot(skills.mca04, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM avec les `Compétences créatives` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r MCA skills créatives internaute}
+skills.mca05 <- MCA(internaute[,235:238], graph = FALSE)
+summary(skills.mca05)
+# Amélioration des graphes
+plot(skills.mca05, cex = 0.7)
+plot(skills.mca05, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca05, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod="contrib 10", title="Graphe des modalités")
+plot(skills.mca05, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+Quelques soient les modèles d'analyse que nous essayons sur les variable `skills`, inévitablement, les modalités `comprend.pas`, `rdr` et `nsp` pourrissent la représentation graphique.
+
+L'objectif maintenant est :
+
+ * Remplacer les valeurs `comprend.pas`, `rdr` et `nsp` par la valeur `NA`
+ * Utiliser la package missMDA. Pour reprendre François HUSSON, "missMDA impute les données manquantes de sorte que les valeurs imputées n'auront pas d'effet (i.e. pas de poids) dans le calcul des dimensions de l'analyse factorielle". Ce qui est bien mieux que la majorité des méthodes d'analyse factorielle qui exclu les valeurs manquantes. Bien évidemment, j'ai fait un choix qui n'est pas anodin, c'est-à-dire que j'ai considéré que les réponses `nsp`, `comprend.pas` et `NA` comme équivalentes. Ça permet vraiment de ne pas être emmerder avec les valeurs abérantes.
+
+### Remplacer des valeurs `pourries` dans les variables `skills` de la base de données `internaute`
+
+```{r substitute values skills}
+internaute$Skills.1[internaute$Skills.1 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.2[internaute$Skills.2 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.3[internaute$Skills.3 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.4[internaute$Skills.4 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.5[internaute$Skills.5 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.6[internaute$Skills.6 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.7[internaute$Skills.7 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.8[internaute$Skills.8 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.9[internaute$Skills.9 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.10[internaute$Skills.10 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.11[internaute$Skills.11 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.12[internaute$Skills.12 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.13[internaute$Skills.13 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.14[internaute$Skills.14 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.15[internaute$Skills.15 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.16[internaute$Skills.16 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.17[internaute$Skills.17 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.18[internaute$Skills.18 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.19[internaute$Skills.19 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.20[internaute$Skills.20 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$Skills.21[internaute$Skills.21 %in% c("comprend.pas", "nsp", "rdr")] = NA
+internaute$nv.vie[internaute$nv.vie %in% c("nsp")] = NA
+internaute$etude[internaute$etude %in% c("nsp", "rdr")] = NA
+internaute$WIP.statut.fam[internaute$WIP.statut.fam %in% c("rdr")] = NA
+```
+
+### Nouvelle AFM avec les `skills` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r New MFA skills internaute}
+test <- imputeMFA(internaute[,c(218:238)], group = c(4,5,4,4,4), type = c(rep("n",5)), ncp = 5)
+skills.mfaNA <- MFA(test$completeObs, group = c(4,5,4,4,4), type = c(rep("n",5)), ncp = 5, name.group = c("Comp. opérationnelles","Comp. informationnelles","Comp. sociales","Comp. créatives","Comp. mobiles"), graph = FALSE)
+plot(skills.mfaNA, cex = 0.6, cex.axis = 0.8, cex.lab = 0.8, title = "AFM des compétences numériques")
+plot(skills.mfaNA, choix = "group", cex = 0.7, autoLab = "y", shadow = TRUE, title = "Graphe des groupes de variables")
+plot(skills.mfaNA, choix = "axes", cex = 0.7, shadow = TRUE,  select = "contrib 10", title = "Graphe des axes partiels") # Essayer de supprimer la légende
+plot(skills.mfaNA, choix = "ind", invisible = c("quali"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mfaNA, invisible = c("ind"), cex=0.6, autoLab="y", shadow = TRUE, title="Graphe des modalités actives")
+barplot(skills.mfaNA$eig[,1], sub = "AFM des compétences numériques", xlab = "Axes", ylab = "Pourcentage d'inertie", cex.axis = 0.6, cex.names = 0.6, col = "orange", names.arg = 1:nrow(skills.mfaNA$eig), main = "Histogramme des valeurs propres")
+```
+
+### Nouvelle nouvelle AFM avec les `skills` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r New new MFA skills internaute}
+test2 <- imputeMFA(internaute[,c(1,3,4,68,283,284,286,218:238)], group = c(1,1,1,1,1,1,1,4,5,4,4,4), type = c(rep("n",12)), ncp = 5)
+skills.mfaNA2 <- MFA(test2$completeObs, group = c(1,1,1,1,1,1,1,4,5,4,4,4), type = c(rep("n",12)), ncp = 5, name.group = c("Sexe","Age","Profession","Aisance Internet","Niveau de vie","Niveau d'études", "Statut familiale", "Compétences opérationnelles","Compétences informationnelles","Compétences sociales","Compétences créatives","Compétences mobiles"), num.group.sup = c(1,2,3,4,5,6,7), graph = FALSE) # AFM avec le sexe, l'âge, la profession, l'aisance avec internet, le revenu du ménage, le niveau d'étude et la situation familiale en variables qualitatives supplémentaires
+plot(skills.mfaNA2, cex = 0.6, cex.axis = 0.8, cex.lab = 0.8, title = "AFM des compétences numériques")
+plot(skills.mfaNA2, choix = "group", cex = 0.7, autoLab = "y", shadow = TRUE, title = "Graphe des groupes de variables")
+plot(skills.mfaNA2, choix = "axes", cex = 0.7, shadow = TRUE,  select = "contrib 10", title = "Graphe des axes partiels") # Essayer de supprimer la légende
+plot(skills.mfaNA2, choix = "ind", invisible = c("quali"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mfaNA2, invisible = c("ind"), cex=0.6, autoLab="y", shadow = TRUE, title="Graphe des modalités actives")
+barplot(skills.mfaNA2$eig[,1], sub = "AFM des compétences numériques", xlab = "Axes", ylab = "Pourcentage d'inertie", cex.axis = 0.6, cex.names = 0.6, col = "orange", names.arg = 1:nrow(skills.mfaNA2$eig), main = "Histogramme des valeurs propres")
+```
+
+```{r New new MFA skills internaute amélioré}
+fviz_screeplot(skills.mfaNA2, title = "Histogramme des valeurs propres")
+fviz_mfa_var(skills.mfaNA2, "group", autoLab = "y", repel = TRUE, title = "Graphe des groupes de variables")
+fviz_mfa_ind(skills.mfaNA2, col.ind = "cos2", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel = FALSE, title = "Graphe des individus") # Ind. coloriés selon cos2
+fviz_mfa_axes(skills.mfaNA2, repel = TRUE, title = "Graphe des axes partiels")
+fviz_mfa_var(skills.mfaNA2, "quali.var", title = "Graphe des modalités des variables qualitatives")
+```
+
+### Classification Ascendante Hiérarchique sur l'AFM avec les `skills` de la sous-population `ìnternaute` sur le jeu de données `capacity`
+
+```{r HCPC MFA skills internaute}
+HCPC(skills.mfaNA2)
+```
+
+cah.skills2 <- HCPC(skills.mfaNA2)
+freq(cah.skills2$data.clust$clust) # Pour les effectifs des classes
+
+    n    %  %Cum
+1  961 56.2 56.2
+2  244 14.3 70.5
+3  371 21.7 92.2
+4  133  7.8  100
+
+cah.skills2$data.clust # Donne la position des individus dans les différentes
+cah.skills2$desc.var
+cah.skills2$desc.ind
+Plus de détails, voir : http://larmarange.github.io/analyse-R/classification-ascendante-hierarchique.html
+
+### À remplir plus tard
+
+```{r HCPC MFA skills internaute desc.var}
+cah.skills2$desc.var
+```
+
+### ACM revue avec les `skills` avec le package `ade4`
+
+```{r MCA new ade4 skills internaute}
+skills.mcaade4NA <- dudi.acm(droplevels(internaute[,c(218:238)]), scannf = FALSE, nf = 5) # ACM (Je crois que "droplevels()" supprime les cellules vides)
+screeplot(skills.mcaade4NA) # Graphique de valeurs propres
+summary(skills.mcaade4NA)
+s.corcircle(skills.mcaade4NA$co, 1, 2, clabel = 0.7) # représentation du cercle de corrélation des modalités
+s.label(skills.mcaade4NA$co, clabel = 0.7) # Représentation des modalités sur le plan factoriel
+s.label(skills.mcaade4NA$li, clabel = 0, pch = 17) # représentation des individus sur le plan factoriel
+s.freq(skills.mcaade4NA$li) # représentation des individus sur le plan factoriel (où chaque point est proportionnel au nombre d'individus)
+```
+
+Il y a une différence entre les 2 bases de données. C'est légèrement plus lisible sur la base `capacity`.
+
+### ACM revue avec les `Compétences opérationnelles`
+
+```{r MCA new skills opérationnelles internaute avec missMDA}
+comp01 <- imputeMCA(internaute[,218:221]) # Complète le tableau de données
+skills.mca01NA <- MCA(comp01$completeObs, graph = FALSE)
+internaute[,218:221] # Tableau de données initial avec les valeurs manquantes ("NA")
+comp01$completeObs # Tableau de données complété
+summary(skills.mca01NA)
+# Amélioration des graphes
+plot(skills.mca01NA, cex = 0.7)
+plot(skills.mca01NA, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca01NA, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod = "contrib 10", title = "Graphe des modalités")
+plot(skills.mca01NA, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM revue avec les `Compétences informationnelles`
+
+```{r MCA new skills informationnelles internaute avec missMDA}
+comp02 <- imputeMCA(internaute[,222:226]) # Complète le tableau de données
+skills.mca02NA <- MCA(comp02$completeObs, graph = FALSE)
+internaute[,222:226] # Tableau de données initial avec les valeurs manquantes ("NA")
+comp02$completeObs # Tableau de données complété
+summary(skills.mca02NA)
+# Amélioration des graphes
+plot(skills.mca02NA, cex = 0.7)
+plot(skills.mca02NA, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca02NA, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod = "contrib 10", title = "Graphe des modalités")
+plot(skills.mca02NA, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM revue avec les `Compétences sociales`
+
+```{r MCA new skills sociales internaute avec missMDA}
+comp03 <- imputeMCA(internaute[,227:230]) # Complète le tableau de données
+skills.mca03NA <- MCA(comp03$completeObs, graph = FALSE)
+internaute[,227:230] # Tableau de données initial avec les valeurs manquantes ("NA")
+comp03$completeObs # Tableau de données complété
+summary(skills.mca03NA)
+# Amélioration des graphes
+plot(skills.mca03NA, cex = 0.7)
+plot(skills.mca03NA, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca03NA, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod = "contrib 10", title = "Graphe des modalités")
+plot(skills.mca03NA, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM revue avec les `Compétences mobiles`
+
+```{r MCA new skills mobiles internaute avec missMDA}
+comp04 <- imputeMCA(internaute[,231:234]) # Complète le tableau de données
+skills.mca04NA <- MCA(comp04$completeObs, graph = FALSE)
+internaute[,231:234] # Tableau de données initial avec les valeurs manquantes ("NA")
+comp04$completeObs # Tableau de données complété
+summary(skills.mca04NA)
+# Amélioration des graphes
+plot(skills.mca04NA, cex = 0.7)
+plot(skills.mca04NA, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca04NA, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod = "contrib 10", title = "Graphe des modalités")
+plot(skills.mca04NA, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+### ACM revue avec les `Compétences créatives` de la sous-population `ìnternautebis` sur le jeu de données `capacitybis` et avec le package `missMDA`
+
+```{r MCA new skills créatives internaute avec missMDA}
+comp05 <- imputeMCA(internaute[,235:238]) # Complète le tableau de données
+skills.mca05NA <- MCA(comp05$completeObs, graph = FALSE)
+internaute[,235:238] # Tableau de données initial avec les valeurs manquantes ("NA")
+comp05$completeObs # Tableau de données complété
+summary(skills.mca05NA)
+# Amélioration des graphes
+plot(skills.mca05NA, cex = 0.7)
+plot(skills.mca05NA, invisible = c("var"), cex = 0.7, title = "Graphe des individus")
+plot(skills.mca05NA, invisible = c("ind"), cex = 0.7, autoLab = "y", selectMod = "contrib 10", title = "Graphe des modalités")
+plot(skills.mca05NA, choix = "var", cex = 0.7, title = "Graphe des variables")
+```
+
+
+
