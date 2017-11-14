@@ -1,0 +1,391 @@
+---
+title: "Typologie des compétences numériques des Français"
+author: "Laurent Mell, Nicolas Deporte &co"
+date: "14 novembre 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+```
+
+
+### Préparation de la base pour l'analyse
+
+```{r packages, echo=FALSE, include=FALSE}
+library(questionr)
+library(FactoMineR)
+library(dplyr)
+library(forcats)
+library(stringr)
+library(factoextra)
+library(gridExtra)
+```
+
+
+```{r clean, echo=FALSE, include=FALSE, eval=FALSE}
+#capacity <- read.csv("capacity_data_r1.csv", header=TRUE, row.names=1, check.names=FALSE, fileEncoding="latin1")
+
+# Chargement de la base
+load(file="Capacity.Rdata")
+
+# Recodage
+levels(data$internaute)=c("oui","non")
+levels(data$age_rec)=c("18-24","25-34","35-49","50-64",">=65")
+levels(data$etude)=c("Bac","CAP-BEP","DK","Collège","REF","SupCourt","SupLong")
+levels(data$prof)=c("Agri","Artisan","Cadre","Etudiant","Employé","Ouvrier","Profint","Retraité","SansAct")
+levels(data$niveau.vie)=c("DK","confortable","très confortable","difficile","très difficile","s'en sort")
+levels(data$WIP.revenu)=c("DK","1400-2000","2000-2900","2900-4000","< 1400","> 4000","REF")
+
+data$etude=factor(data$etude, levels=levels(data$etude)[c(4,1,2,6,7,3,5)])
+data$niveau.vie=factor(data$niveau.vie, levels=levels(data$niveau.vie)[c(3,2,6,4,5,1)])
+data$WIP.revenu=factor(data$WIP.revenu, levels=levels(data$WIP.revenu)[c(5,2,3,4,6,1,7)])
+
+data$agglo5=fct_collapse(as.factor(data$agglo), "123"=c("1","2","3"), "45"=c("4","5"), "67"=c("6","7"))
+data$csp=fct_collapse(data$prof, "CSP+"=c("Artisan","Cadre","Profint"), "CSP-"=c("Agri","Employé","Ouvrier","SansAct"))
+
+# Nb d'années d'utilisation d'Internet
+data=rename(data, debutInt=WIP.debut.Internet_annee)
+data=data[-which(data$debutInt>25),]
+data[which(is.na(data$debutInt)),"debutInt"]=1 # pour les utilisateurs de moins d'un an, on les met à 1 an
+data$debutIntrec=cut(data$debutInt, breaks=c(-1,9,12,16,25), right=TRUE, labels=c("<=9an","]9,12]an","]12,16]an",">=17an"))
+# Aise par rapport à l'utilisation d'Internet
+levels(data$aise)=c("nonInt","+","--","-","++")
+# Statut familial Q60
+levels(data$WIP.statut.fam)=c("célib","séparé","concub","marié","pacsé","rdr","veuf")
+# Nombre de personnes dans le foyer Q61
+data$nbFoyerrec=cut(data$nb.foyer, breaks=c(0,1,2,4,9), right=TRUE, labels=c("1p","2p","3-4p","5p+"))
+# Rapport à l'actualité Q65
+levels(data$actu)=c("nsp","jam","MS","PFPJ","jour","mois","sem")
+# Rapport à l'écrit Q66
+levels(data$ecrit)=c("nsp","jam","MS","PFPJ","jour","mois","sem")
+
+data=rename(data, vie=niveau.vie, revenu=WIP.revenu, statFam=WIP.statut.fam)
+
+# Sélection des variables d'intérêt : les skill + var illustratives
+skill=select(data, sexe, age_rec, etude, prof, csp, vie, revenu, statFam, nbFoyerrec, agglo5, internaute, debutIntrec, aise, actu, ecrit, poids, skills_1:skills_21)
+
+# Recodage des skills
+for(i in 1:21){
+  levels(skill[,paste0("skills_",i)])=c("--","-","++","+","nsp","rdr","comprend.pas")
+}
+
+
+# saveskill=skill
+# skill=saveskill
+
+# Suppression des individus qui ont répondu 'rdr' (ca en fait 10)
+for(i in which(str_detect(colnames(skill),"skills"))){
+  if(length(which(skill[,i] %in% c('rdr','nsp','comprend.pas')))>0){
+    skill=skill[-which(skill[,i] %in% c('rdr','nsp','comprend.pas')),]
+    skill[,i]=droplevels(skill[,i])
+  }
+  cat("Dim=",dim(skill),"\n")
+}
+
+
+skill=rename(skill, 
+             age=age_rec, nbFoy=nbFoyerrec, agglo=agglo5, debInt=debutIntrec,
+             ope1=skills_1, ope2=skills_2, ope3=skills_3, ope4=skills_4, 
+             inf1=skills_5, inf2=skills_6, inf3=skills_7, inf4=skills_8, inf5=skills_9,
+             soc1=skills_10, soc2=skills_11, soc3=skills_12, soc4=skills_13,
+             crea1=skills_14, crea2=skills_15, crea3=skills_16, crea4=skills_17,
+             mob1=skills_18, mob2=skills_19, mob3=skills_20, mob4=skills_21)
+
+
+#View(skill[which(rownames(skill) %in% c(1805, 1783, 403, 2022, 1484, 554, 1068, 657, 1439, 1133, 1780)),])
+#skill[which(rownames(skill)==410),]
+
+# On supprime 12 individus dont les réponses contiennent beaucoup de 'nsp' ou 'comprend.pas' -> individus outliers 
+#skill=skill[-which(rownames(skill) %in% c(1805, 1783, 403, 2022, 1484, 554, 1068, 657, 1439, 1133, 1780, 1794)),]
+
+# save(skill, file="skill.Rdata")
+
+```
+
+La préparation est faite !
+
+
+### AFM
+
+```{r MFA, eval=FALSE}
+#load(file="skill.Rdata")
+resMFA <- MFA(skill, group=c(15,1,4,5,4,4,4), type=c("n","c","n","n","n","n","n"), ncp=24, name.group=c("Illustratives","Pondération","Comp. opérationnelles","Comp. informationnelles","Comp. sociales","Comp. créatives","Comp. mobiles"), num.group.sup=c(1,2), graph=FALSE, row.w=skill$poids)
+# ou ncp=24 -> 75% de l'inertie initiale est conservée (pour la CAH)
+#summary(resMFA)
+
+#save(resMFA, file="resMFA.Rdata")
+```
+
+
+### Histogramme des valeurs propres
+
+```{r barplot_val_propres}
+load(file="resMFA.Rdata")
+barplot(resMFA$eig[1:26,3], main="Histogramme des valeurs propres", 
+        xlab="Dimension", ylab="Pourcentage d'inertie (%)", cex.axis=0.7, cex.names=0.7,
+        col=c(rep("orange",24),rep("gray",2)), names.arg=1:26, ylim=c(0,80))
+abline(h=75, lty=2)
+text(x=0,y=77,labels="75 %",cex=0.8)
+
+
+fviz_eig(resMFA, choice="variance", ncp=15, addlabels=TRUE, ylim=c(0,23), xlim=c(1,15.2))
+fviz_eig(resMFA, choice="eigenvalue", ncp=20, addlabels=TRUE, ylim=c(0,4.2))
+```
+
+On garde les 24 premières composantes principales, ce qui permet de conserver 75% de l'inertie initiale du jeu de données.
+
+Si on veut étudier les premiers axes de l'AFM, on peut regarder principalement les 4 premiers axes.
+
+
+
+
+<!-- ### Etude de l'AFM -->
+
+<!-- ```{r graph_MFA_groupe, fig.width=8, fig.height=6} -->
+
+<!-- # Groupes -->
+<!-- #-------------------- -->
+<!-- # Représentation des groupes sur le 1er plan factoriel -->
+<!-- plot(resMFA, choix=c("group"), shadowtext=TRUE, cex=0.8, ylim=c(0,0.6)) -->
+<!-- #fviz_mfa_var(resMFA, "group") -->
+
+<!-- # Contribution des groupes aux 6 premières dimensions -->
+<!-- p1=fviz_contrib(resMFA, "group", axes=1) + ggtitle("Dim 1") -->
+<!-- p2=fviz_contrib(resMFA, "group", axes=2) + ggtitle("Dim 2") -->
+<!-- p3=fviz_contrib(resMFA, "group", axes=3) + ggtitle("Dim 3") -->
+<!-- p4=fviz_contrib(resMFA, "group", axes=4) + ggtitle("Dim 4") -->
+<!-- p5=fviz_contrib(resMFA, "group", axes=5) + ggtitle("Dim 5") -->
+<!-- p6=fviz_contrib(resMFA, "group", axes=6) + ggtitle("Dim 6") -->
+<!-- grid.arrange(p1,p2,p3,p4,p5,p6, ncol=3, nrow=2) -->
+
+<!-- ``` -->
+
+<!-- ```{r graph_MFA_axes-partiels, fig.width=8, fig.height=6} -->
+
+<!-- # Axes partiels -->
+<!-- #-------------------- -->
+<!-- # Représentation des axes partiels sur les axes de l'AFM -->
+<!-- plot(resMFA, choix=c("axes"), cex=0.8, select="contrib 10", autoLab="auto", shadowtext=TRUE, legend=list(plot=FALSE)) -->
+<!-- #fviz_mfa_axes(resMFA, select.axes=list(contrib=10), repel=TRUE) + theme(legend.position='none') -->
+
+
+
+<!-- # # Qualité de représentation (cos2) des modalités des variables sur les axes factoriels -->
+<!-- # var=get_mfa_var(resMFA, "quali.var") -->
+<!-- # library(corrplot) -->
+<!-- # corrplot(var$cos2, is.corr=FALSE) -->
+<!-- # a=corrplot(var$contrib, is.corr=FALSE) -->
+<!-- # corrplot(t(a)) -->
+
+<!-- ```   -->
+
+<!-- La projection des groupes dans le premier plan factoriel montre une proximité importante entre les groupes "Compétences opérationnelles", "informationnelles", "sociales" et "mobiles". Les compétences créatives quant à elles apparaissent relativement éloignées des 4 groupes précedemment cités. Cet éloignement traduit un rôle spécifique joué par les compétences créatives dans les profils de compétences des répondants. A l'inverse, la proximité constatée entre les 4 autres groupes traduit des profils assez proches d'un type de compétences à l'autre. -->
+
+<!-- Ces 4 groupes de compétence ont des coordonnées positives élevées sur le plan factoriel 1-2 (1er quadrant) et contribuent fortement à la construction des axes 1, 2 et 3. Les compétences créatives ont une contribution moins forte sur ces axes. En revanche, elles vont très fortement contribuer aux axes 4, 5 et 6 et définir quasiment à elles seules les axes 4 et 6 (les compétences mobiles contribuent également fortement à l'axe 5). -->
+
+<!-- La projection des axes partiels sur le premier plan de l'AFM montre que les dimensions 1 (resp. 2) des groupes "Compétences opérationnelles", "mobiles", "sociales" et "informationnelles" sont très corrélées positivement à la première (resp. deuxième) dimension de l'AFM. Tandis que la dimension 1 des compétences créatives est assez fortement corrélée négativement à la dimension 1 de l'AFM et que la dimension 2 de ces compétences est moyennement corrélée positivement à la dimension 2 de l'AFM. Ce qui confirme le rôle particulier joué par ce type de compétences dans la compétence numérique globale. -->
+
+
+
+<!-- ```{r graph_MFA_ind, fig.width=8, fig.height=6} -->
+
+<!-- # Individus -->
+<!-- #-------------------- -->
+<!-- # Représentation des individus -->
+<!-- plot(resMFA, choix=c("ind"), invisible=("quali"), lab.ind=FALSE) -->
+<!-- # Représentation des individus colorés en fonction de leur cos2 -->
+<!-- fviz_mfa_ind(resMFA, col.ind="cos2", gradient.cols=c("#00AFBB","#E7B800","#FC4E07"), geom="point", label="none", invisible=c("var","quali.sup","quanti.sup"), repel=TRUE) -->
+
+<!-- ``` -->
+
+<!-- La projection des individus et des variables illustratives sur le premier plan factoriel laisse entrevoir une opposition le long de l'axe 1 entre les "jeunes, étudiants, très à l'aise avec Internet" situés sur la gauche du graphique et les "personnes âgées, retraités, pas à l'aise avec Internet voire non-internautes" situés sur la droite du graphique. -->
+
+
+<!-- ```{r graph_MFA_modalite, fig.width=8, fig.height=6} -->
+
+<!-- # Modalités -->
+<!-- #-------------------- -->
+<!-- # Représentation des modalités -->
+<!-- fviz_mfa_var(resMFA, "quali.var", axes=c(1,2), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3)   -->
+<!-- fviz_mfa_var(resMFA, "quali.var", axes=c(2,3), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3) -->
+<!-- fviz_mfa_var(resMFA, "quali.var", axes=c(3,4), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3) -->
+
+<!-- # Contributions des modalités aux 4 premières dimensions -->
+<!-- p1=fviz_contrib(resMFA, choice="quali.var", axes=1, top=20, palette="jco") + ggtitle("Dim 1") -->
+<!-- p2=fviz_contrib(resMFA, choice="quali.var", axes=2, top=20, palette="jco") + ggtitle("Dim 2") -->
+<!-- p3=fviz_contrib(resMFA, choice="quali.var", axes=3, top=20, palette="jco") + ggtitle("Dim 3") -->
+<!-- p4=fviz_contrib(resMFA, choice="quali.var", axes=4, top=20, palette="jco") + ggtitle("Dim 4") -->
+<!-- grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2) -->
+
+<!-- # Cos2 des modalités sur les 4 premières dimensions -->
+<!-- p1=fviz_cos2(resMFA, choice="quali.var", axes=1, top=20, palette="jco") + ggtitle("Dim 1") -->
+<!-- p2=fviz_cos2(resMFA, choice="quali.var", axes=2, top=20, palette="jco") + ggtitle("Dim 2") -->
+<!-- p3=fviz_cos2(resMFA, choice="quali.var", axes=3, top=20, palette="jco") + ggtitle("Dim 3") -->
+<!-- p4=fviz_cos2(resMFA, choice="quali.var", axes=4, top=20, palette="jco") + ggtitle("Dim 4") -->
+<!-- grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2) -->
+
+<!-- ``` -->
+
+<!-- Une analyse plus détaillée des contributions des modalités des variables actives de l'AFM à la construction des premiers axes montre que : -->
+
+<!-- * Axe 1 -->
+<!--   + contribution positive : les modalités "Cela ne vous ressemble pas du tout" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, crea3, les 4 sociales, inf4, mob3, crea1, etc. -->
+<!--   + contribution négative : les modalités "Cela vous ressemble beaucoup" des variables crea3, crea1, soc3, etc. -->
+
+<!-- * Axe 2 -->
+<!--   + contribution positive : les modalités "Cela vous ressemble plutôt bien" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, les 4 mobiles, soc3, soc2, inf4, inf1, etc.  -->
+<!--   + contribution négative : les modalités "Cela vous ressemble beaucoup" ou "Cela ne vous ressemble pas du tout" des variables crea3, crea1, soc1, inf1, etc. -->
+
+<!-- * Axe 3 -->
+<!--   + contribution positive : les modalités "Cela vous ressemble assez peu" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, soc2, inf1, inf2, soc3, mob3, etc.  -->
+<!--   + contribution négative : les modalités "Cela vous ressemble plutôt bien" des variables crea3, mob2, mob1, crea1, ope4, soc4, etc. -->
+
+<!-- * Axe 4 -->
+<!--   + contribution positive : les modalités "Cela vous ressemble beaucoup" des variables de compétences créatives. -->
+<!--   + contribution négative : les modalités "Cela vous ressemble plutôt bien" et "Cela vous ressemble assez peu" des variables de compétences créatives. -->
+
+
+
+
+
+### Classification ascendante hiérarchique sur le résultat de l'AFM
+
+```{r HCPC, fig.width=8, fig.height=6}
+#resHCPC=HCPC(resMFA)
+nbClasse=5
+# partition en 5 ok un peu global -> sans doute la plus optimale / claire
+# 6 ok (distingue les crea++ en cl1, notamment crea4++ coder),
+# 7 ok commence à être fin (distingue les - et les -- chez les internautes),
+# 8 trop fin (sépare les crea4++ et +), 9 trop fin (même séparation que pour 8 au niveau des crea)
+resHCPC=HCPC(resMFA, nb.clust=nbClasse, graph=FALSE)
+# resHCPC=HCPC(resMFA,nb.clust=9, graph=FALSE)
+
+# Dendrogramme
+plot(resHCPC, choice="tree", labels=FALSE)
+# Nb de classes
+plot(resHCPC, choice="bar")
+
+
+skillClust=resHCPC$data.clust
+skillClust$poids=as.numeric(as.character(skillClust$poids))
+# Répartition par classe
+freq(wtd.table(skillClust$clust, weights=skillClust$poids))
+#catdes(skillClust,38)
+
+# # Description des classes
+#
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`1`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`2`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`3`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`4`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`5`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`6`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`7`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`8`,2),45)
+# head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`9`,2),45)
+
+```
+Le dendrogramme laisse deviner 5 classes naturelles. Ce choix est confirmé par le saut d'inertie présent entre le passage de 4 à 5 classes et le passage de 5 à 6 classes.
+
+Les classes obtenues présentent des effectifs allant de 161 répondants (soit 10%) pour la plus petite à 585 répondants (soit 36%) pour la plus grande.
+
+
+
+
+```{r HCPC_graph_clust, fig.width=8, fig.height=6}
+
+# Représentation des classes sur les premiers plans factoriels
+
+# plot(resHCPC, choice="map", ind.names=FALSE, draw.tree=FALSE, axes=c(1,2))
+# plot(resHCPC, choice="map", ind.names=FALSE, draw.tree=FALSE, axes=c(2,3))
+# plot(resHCPC, choice="map", ind.names=FALSE, draw.tree=FALSE, axes=c(3,4))
+# plot(resHCPC, choice="map", ind.names=FALSE, draw.tree=FALSE, axes=c(4,5))
+
+fviz_cluster(resHCPC, repel=FALSE, shape=16, ellipse=TRUE, geom="point",
+             ggtheme=theme_minimal(), main="Factor map") +
+  geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0, linetype="dotted")
+fviz_cluster(resHCPC, repel=FALSE, shape=16, ellipse=TRUE, geom="point",
+             ggtheme=theme_minimal(), main="Factor map", axes=c(2,3)) +
+  geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0, linetype="dotted")
+fviz_cluster(resHCPC, repel=FALSE, shape=16, ellipse=TRUE, geom="point",
+             ggtheme=theme_minimal(), main="Factor map", axes=c(3,4)) +
+  geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0, linetype="dotted")
+
+
+
+# library(tibble)
+# a1=rownames_to_column(skillClust)
+# a2=rownames_to_column(data[,c("WIP.outil_4","WIP.outil_5")])
+# a=left_join(a1,a2,by="rowname")
+# round(prop.table(table(a$clust,a$WIP.outil_5),1)*100)
+
+```
+
+La projection des classes sur le plan 1-2 laisse apparaître des classes plutôt bien séparées, laissant augurer des profils de compétences distincts.
+
+
+## Description des classes (signif à 1%)
+
+### Classe 1
+
+```{r classe1, echo=FALSE}
+head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`1`,2),47)
+```
+
+La classe 1 est la deuxième classe la plus importante en taille et contient environ 23% des répondants.  
+Elle regroupe les individus se déclarant très à l'aise avec l'ensemble des compétences abordées, quel que soit le type de compétences, même créatives. En effet, 87% d'entre eux déclarent savoir comment créer quelque chose de nouveau à partir d'images, de musiques ou de vidéos, et 95% savoir mettre en ligne du contenu. Cette classe rassemble 96% des répondants ayant déclaré savoir créer un site web et 95% de ceux déclarant savoir coder/programmer dans un langage informatique.
+Ces personnes sont internautes (100%). Parmi elles, les jeunes (18-24 ans 26%, 25-34 ans 26%) sont sur-représentés, tout comme les étudiants et les cadres, les hommes, les personnes ayant fait des études supérieures courtes et longues, les célibataires, les CSP+, les personnes déclarant avoir une vie très confortable, vivant à 3 ou 4 personnes par foyer, ecrit et actu fréquent.
+
+### Classe 2
+
+```{r classe2, echo=FALSE}
+head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`2`,2),46)
+```
+
+La classe 2 est la classe la plus grande avec 36% des répondants.
+La classe 2 regroupe les individus déclarant également de très bonnes compétences opérationnelles, informationnelles, sociales et mobiles, mais contrairement aux individus de la classe 1 ils sont nettement moins à l'aise avec les compétences créatives et notamment pour ce qui a trait à la création de site et à la programmation. En effet, 82% (resp. 90%) d'entre eux disent que savoir créer un site web (resp. programmer) ne leur ressemble pas du tout.
+Prof intermédiare, supérieur court et long, 25-34, 35-49 ans, 3-4 personnes dans le foyer, ancien sur internet, CSP+ et -, employés, revenu 2900-4000€, ancienneté >=17 ans et 12-16 ans, très à l'aise avec Internet, internaute (100%)
+
+
+### Classe 3
+
+```{r classe3, echo=FALSE}
+head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`3`,2),32)
+```
+
+La classe 3 est la plus petite avec environ 10% des répondants.
+C'est la classe des individus ayant de plutôt bonnes compétences dans tous les types abordés, même s'ils sont globalement moins à l'aise avec les compétences créatives.
+35-49 ans, employé, à l'aise avec Internet, ancienneté 9-12 ans, internautes (99%)
+
+### Classe 4
+
+```{r classe4, echo=FALSE}
+head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`4`,2),49)
+```
+
+La classe 4 contient environ 15% de la population.
+C'est la classe des individus ayant des compétences faibles ou très faibles dans la plupart des compétences abordées. Ils se sentent néanmoins assez à l'aise sur quelques points comme la recherche d'informations en ligne, l'utilisation de bons mots-clés, rechercher des itinéraires en ligne, ouvrir un fichier téléchargé, envoyer un email et y joindre un document, se connecter à un réseau wifi. Bref, quelques usages assez basiques.
+94% de ces individus sont internautes. 50-64 ans et >=65 ans, retraités, assez peu à l'aise avec Internet, CAP-BEP, mariés, femme, ancienneté < 9 ans
+
+### Classe 5
+
+```{r classe5, echo=FALSE}
+head(round(catdes(skillClust,38,proba=0.01,row.w=skillClust$poids)$category$`5`,2),42)
+```
+
+La classe 5 contient environ 16% des répondants.
+Ces individus ont des compétences très faibles sur l'ensemble des types de compétences (plus encore que la classe 4).
+78% ne sont pas internautes (grosse différence par rapport à la classe 4).
+>=65 ans, 50-64 ans, retraités, veuf, 1p dans le foyer, revenu < 1400€, vie très difficile, ancienneté < 9 ans, pas du tout à l'aise avec Internet, agriculteurs, CAP-BEP
+
+
+
+
+
+
+
+
+
+
