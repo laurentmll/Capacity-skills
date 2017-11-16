@@ -1,5 +1,6 @@
 ---
 title: "Typologie des compétences numériques des Français"
+subtitle: "Suppression de tous les ind qui ont répondu 'nsp','rdr' ou 'comprend.pas' dans Skill"
 author: "Laurent Mell, Nicolas Deporte &co"
 date: "14 novembre 2017"
 output: html_document
@@ -22,6 +23,28 @@ library(stringr)
 library(factoextra)
 library(gridExtra)
 ```
+
+On a un problème avec les individus qui ont répondu 'nsp','rdr' ou 'comprend.pas'. C'est un comportement "inhabituel" par rapport à la norme des réponses, qui va générer la création d'axes (dans les 1ers axes) dédiés à 'nsp','rdr' ou 'comprend.pas' et ensuite générer des classes autour de ces réponses et brouiller la classification.
+
+Il faut donc traiter ces réponses préalablement à l'AFM + HCPC.
+
+2 solutions :
+
+* soit on supprime simplement tous les individus qui ont répondu au moins une fois 'nsp','rdr' ou 'comprend.pas'. On enlève alors 402 répondants.
+
+* soit on supprime seulement les individus qui ont répondu trop souvent 'nsp','rdr' ou 'comprend.pas',
+par exemple, tous ceux qui ont répondu 3 fois ou plus 'nsp','rdr' ou 'comprend.pas'.
+On enlève alors seulement 146 répondants.
+
+Ici on réalise la solution 1.
+
+
+length(which(apply(skill[,17:37],1,function(x) any(x=="comprend.pas"))==TRUE))
+length(which(apply(skill[,17:37],1,function(x) any(x=="nsp"))==TRUE))
+
+226 répondants ont répondu au moins 1 fois "Ne comprend pas"
+200 répondants ont répondu au moins 1 fois "Ne sait pas"
+
 
 
 ```{r clean, echo=FALSE, include=FALSE, eval=FALSE}
@@ -72,10 +95,8 @@ for(i in 1:21){
 }
 
 
-# saveskill=skill
-# skill=saveskill
-
-# Suppression des individus qui ont répondu 'rdr' (ca en fait 10)
+# Le code de la 1ère solution
+# Suppression des individus qui ont répondu 'rdr' (10ind), ou 'nsp', ou 'comprend.pas' (402 ind en tt)
 for(i in which(str_detect(colnames(skill),"skills"))){
   if(length(which(skill[,i] %in% c('rdr','nsp','comprend.pas')))>0){
     skill=skill[-which(skill[,i] %in% c('rdr','nsp','comprend.pas')),]
@@ -93,12 +114,6 @@ skill=rename(skill,
              crea1=skills_14, crea2=skills_15, crea3=skills_16, crea4=skills_17,
              mob1=skills_18, mob2=skills_19, mob3=skills_20, mob4=skills_21)
 
-
-#View(skill[which(rownames(skill) %in% c(1805, 1783, 403, 2022, 1484, 554, 1068, 657, 1439, 1133, 1780)),])
-#skill[which(rownames(skill)==410),]
-
-# On supprime 12 individus dont les réponses contiennent beaucoup de 'nsp' ou 'comprend.pas' -> individus outliers 
-#skill=skill[-which(rownames(skill) %in% c(1805, 1783, 403, 2022, 1484, 554, 1068, 657, 1439, 1133, 1780, 1794)),]
 
 # save(skill, file="skill.Rdata")
 
@@ -136,115 +151,123 @@ fviz_eig(resMFA, choice="eigenvalue", ncp=20, addlabels=TRUE, ylim=c(0,4.2))
 
 On garde les 24 premières composantes principales, ce qui permet de conserver 75% de l'inertie initiale du jeu de données.
 
-Si on veut étudier les premiers axes de l'AFM, on peut regarder principalement les 4 premiers axes.
+Si on veut étudier les premiers axes de l'AFM, on peut regarder principalement les 4-5 premiers axes.
 
 
 
 
-<!-- ### Etude de l'AFM -->
+### Etude de l'AFM
 
-<!-- ```{r graph_MFA_groupe, fig.width=8, fig.height=6} -->
+```{r graph_MFA_groupe, fig.width=8, fig.height=6}
 
-<!-- # Groupes -->
-<!-- #-------------------- -->
-<!-- # Représentation des groupes sur le 1er plan factoriel -->
-<!-- plot(resMFA, choix=c("group"), shadowtext=TRUE, cex=0.8, ylim=c(0,0.6)) -->
-<!-- #fviz_mfa_var(resMFA, "group") -->
+# Groupes
+#--------------------
+# Représentation des groupes sur le 1er plan factoriel
+plot(resMFA, choix=c("group"), shadowtext=TRUE, cex=0.8, ylim=c(0,0.6))
+#fviz_mfa_var(resMFA, "group")
 
-<!-- # Contribution des groupes aux 6 premières dimensions -->
-<!-- p1=fviz_contrib(resMFA, "group", axes=1) + ggtitle("Dim 1") -->
-<!-- p2=fviz_contrib(resMFA, "group", axes=2) + ggtitle("Dim 2") -->
-<!-- p3=fviz_contrib(resMFA, "group", axes=3) + ggtitle("Dim 3") -->
-<!-- p4=fviz_contrib(resMFA, "group", axes=4) + ggtitle("Dim 4") -->
-<!-- p5=fviz_contrib(resMFA, "group", axes=5) + ggtitle("Dim 5") -->
-<!-- p6=fviz_contrib(resMFA, "group", axes=6) + ggtitle("Dim 6") -->
-<!-- grid.arrange(p1,p2,p3,p4,p5,p6, ncol=3, nrow=2) -->
+# Contribution des groupes aux 6 premières dimensions
+p1=fviz_contrib(resMFA, "group", axes=1) + ggtitle("Dim 1")
+p2=fviz_contrib(resMFA, "group", axes=2) + ggtitle("Dim 2")
+p3=fviz_contrib(resMFA, "group", axes=3) + ggtitle("Dim 3")
+p4=fviz_contrib(resMFA, "group", axes=4) + ggtitle("Dim 4")
+p5=fviz_contrib(resMFA, "group", axes=5) + ggtitle("Dim 5")
+p6=fviz_contrib(resMFA, "group", axes=6) + ggtitle("Dim 6")
+grid.arrange(p1,p2,p3,p4,p5,p6, ncol=3, nrow=2)
 
-<!-- ``` -->
+```
 
-<!-- ```{r graph_MFA_axes-partiels, fig.width=8, fig.height=6} -->
+```{r graph_MFA_axes-partiels, fig.width=8, fig.height=6}
 
-<!-- # Axes partiels -->
-<!-- #-------------------- -->
-<!-- # Représentation des axes partiels sur les axes de l'AFM -->
-<!-- plot(resMFA, choix=c("axes"), cex=0.8, select="contrib 10", autoLab="auto", shadowtext=TRUE, legend=list(plot=FALSE)) -->
-<!-- #fviz_mfa_axes(resMFA, select.axes=list(contrib=10), repel=TRUE) + theme(legend.position='none') -->
-
-
-
-<!-- # # Qualité de représentation (cos2) des modalités des variables sur les axes factoriels -->
-<!-- # var=get_mfa_var(resMFA, "quali.var") -->
-<!-- # library(corrplot) -->
-<!-- # corrplot(var$cos2, is.corr=FALSE) -->
-<!-- # a=corrplot(var$contrib, is.corr=FALSE) -->
-<!-- # corrplot(t(a)) -->
-
-<!-- ```   -->
-
-<!-- La projection des groupes dans le premier plan factoriel montre une proximité importante entre les groupes "Compétences opérationnelles", "informationnelles", "sociales" et "mobiles". Les compétences créatives quant à elles apparaissent relativement éloignées des 4 groupes précedemment cités. Cet éloignement traduit un rôle spécifique joué par les compétences créatives dans les profils de compétences des répondants. A l'inverse, la proximité constatée entre les 4 autres groupes traduit des profils assez proches d'un type de compétences à l'autre. -->
-
-<!-- Ces 4 groupes de compétence ont des coordonnées positives élevées sur le plan factoriel 1-2 (1er quadrant) et contribuent fortement à la construction des axes 1, 2 et 3. Les compétences créatives ont une contribution moins forte sur ces axes. En revanche, elles vont très fortement contribuer aux axes 4, 5 et 6 et définir quasiment à elles seules les axes 4 et 6 (les compétences mobiles contribuent également fortement à l'axe 5). -->
-
-<!-- La projection des axes partiels sur le premier plan de l'AFM montre que les dimensions 1 (resp. 2) des groupes "Compétences opérationnelles", "mobiles", "sociales" et "informationnelles" sont très corrélées positivement à la première (resp. deuxième) dimension de l'AFM. Tandis que la dimension 1 des compétences créatives est assez fortement corrélée négativement à la dimension 1 de l'AFM et que la dimension 2 de ces compétences est moyennement corrélée positivement à la dimension 2 de l'AFM. Ce qui confirme le rôle particulier joué par ce type de compétences dans la compétence numérique globale. -->
+# Axes partiels
+#--------------------
+# Représentation des axes partiels sur les axes de l'AFM
+plot(resMFA, choix=c("axes"), cex=0.8, select="contrib 10", autoLab="auto", shadowtext=TRUE, legend=list(plot=FALSE))
+#fviz_mfa_axes(resMFA, select.axes=list(contrib=10), repel=TRUE) + theme(legend.position='none')
 
 
 
-<!-- ```{r graph_MFA_ind, fig.width=8, fig.height=6} -->
+# # Qualité de représentation (cos2) des modalités des variables sur les axes factoriels
+# var=get_mfa_var(resMFA, "quali.var")
+# library(corrplot)
+# corrplot(var$cos2, is.corr=FALSE)
+# a=corrplot(var$contrib, is.corr=FALSE)
+# corrplot(t(a))
 
-<!-- # Individus -->
-<!-- #-------------------- -->
-<!-- # Représentation des individus -->
-<!-- plot(resMFA, choix=c("ind"), invisible=("quali"), lab.ind=FALSE) -->
-<!-- # Représentation des individus colorés en fonction de leur cos2 -->
-<!-- fviz_mfa_ind(resMFA, col.ind="cos2", gradient.cols=c("#00AFBB","#E7B800","#FC4E07"), geom="point", label="none", invisible=c("var","quali.sup","quanti.sup"), repel=TRUE) -->
+```
 
-<!-- ``` -->
+La projection des groupes dans le premier plan factoriel montre une proximité importante entre les groupes "Compétences opérationnelles", "informationnelles", "sociales" et "mobiles". Les compétences créatives quant à elles apparaissent relativement éloignées des 4 groupes précedemment cités. Cet éloignement traduit un rôle spécifique joué par les compétences créatives dans les profils de compétences des répondants. A l'inverse, la proximité constatée entre les 4 autres groupes traduit des profils assez proches d'un type de compétences à l'autre.
 
-<!-- La projection des individus et des variables illustratives sur le premier plan factoriel laisse entrevoir une opposition le long de l'axe 1 entre les "jeunes, étudiants, très à l'aise avec Internet" situés sur la gauche du graphique et les "personnes âgées, retraités, pas à l'aise avec Internet voire non-internautes" situés sur la droite du graphique. -->
+Ces 4 groupes de compétence ont des coordonnées positives élevées sur le plan factoriel 1-2 (1er quadrant) et contribuent fortement à la construction des axes 1, 2 et 3. Les compétences créatives ont une contribution moins forte sur ces axes. En revanche, elles vont très fortement contribuer aux axes 4, 5 et 6 et définir quasiment à elles seules les axes 4 et 6 (les compétences mobiles contribuent également fortement à l'axe 5).
+
+La projection des axes partiels sur le premier plan de l'AFM montre que les dimensions 1 (resp. 2) des groupes "Compétences opérationnelles", "mobiles", "sociales" et "informationnelles" sont très corrélées positivement à la première (resp. deuxième) dimension de l'AFM. Tandis que la dimension 1 des compétences créatives est assez fortement corrélée négativement à la dimension 1 de l'AFM et que la dimension 2 de ces compétences est moyennement corrélée positivement à la dimension 2 de l'AFM. Ce qui confirme le rôle particulier joué par ce type de compétences dans la compétence numérique globale.
 
 
-<!-- ```{r graph_MFA_modalite, fig.width=8, fig.height=6} -->
 
-<!-- # Modalités -->
-<!-- #-------------------- -->
-<!-- # Représentation des modalités -->
-<!-- fviz_mfa_var(resMFA, "quali.var", axes=c(1,2), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3)   -->
-<!-- fviz_mfa_var(resMFA, "quali.var", axes=c(2,3), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3) -->
-<!-- fviz_mfa_var(resMFA, "quali.var", axes=c(3,4), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3) -->
+```{r graph_MFA_ind, fig.width=8, fig.height=6}
 
-<!-- # Contributions des modalités aux 4 premières dimensions -->
-<!-- p1=fviz_contrib(resMFA, choice="quali.var", axes=1, top=20, palette="jco") + ggtitle("Dim 1") -->
-<!-- p2=fviz_contrib(resMFA, choice="quali.var", axes=2, top=20, palette="jco") + ggtitle("Dim 2") -->
-<!-- p3=fviz_contrib(resMFA, choice="quali.var", axes=3, top=20, palette="jco") + ggtitle("Dim 3") -->
-<!-- p4=fviz_contrib(resMFA, choice="quali.var", axes=4, top=20, palette="jco") + ggtitle("Dim 4") -->
-<!-- grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2) -->
+# Individus
+#--------------------
+# Représentation des individus
+plot(resMFA, choix=c("ind"), invisible=("quali"), lab.ind=FALSE)
+# Représentation des individus colorés en fonction de leur cos2
+fviz_mfa_ind(resMFA, col.ind="cos2", gradient.cols=c("#00AFBB","#E7B800","#FC4E07"), geom="point", label="none", invisible=c("var","quali.sup","quanti.sup"), repel=TRUE)
 
-<!-- # Cos2 des modalités sur les 4 premières dimensions -->
-<!-- p1=fviz_cos2(resMFA, choice="quali.var", axes=1, top=20, palette="jco") + ggtitle("Dim 1") -->
-<!-- p2=fviz_cos2(resMFA, choice="quali.var", axes=2, top=20, palette="jco") + ggtitle("Dim 2") -->
-<!-- p3=fviz_cos2(resMFA, choice="quali.var", axes=3, top=20, palette="jco") + ggtitle("Dim 3") -->
-<!-- p4=fviz_cos2(resMFA, choice="quali.var", axes=4, top=20, palette="jco") + ggtitle("Dim 4") -->
-<!-- grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2) -->
+```
 
-<!-- ``` -->
+La projection des individus et des variables illustratives sur le premier plan factoriel laisse entrevoir une opposition le long de l'axe 1 entre les "jeunes, étudiants, très à l'aise avec Internet" situés sur la gauche du graphique et les "personnes âgées, retraités, pas à l'aise avec Internet voire non-internautes" situés sur la droite du graphique.
 
-<!-- Une analyse plus détaillée des contributions des modalités des variables actives de l'AFM à la construction des premiers axes montre que : -->
+L'axe 1 présente également un gradient de compétences, des individus les plus compétents à gauche du graphique vers les individus les moins compétents à droite.
 
-<!-- * Axe 1 -->
-<!--   + contribution positive : les modalités "Cela ne vous ressemble pas du tout" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, crea3, les 4 sociales, inf4, mob3, crea1, etc. -->
-<!--   + contribution négative : les modalités "Cela vous ressemble beaucoup" des variables crea3, crea1, soc3, etc. -->
+L'axe 2 oppose les individus extrêmes (très compétents ou très peu compétents) à gauche aux individus moyens (plutôt ou plutôt pas compétents) à droite.
 
-<!-- * Axe 2 -->
-<!--   + contribution positive : les modalités "Cela vous ressemble plutôt bien" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, les 4 mobiles, soc3, soc2, inf4, inf1, etc.  -->
-<!--   + contribution négative : les modalités "Cela vous ressemble beaucoup" ou "Cela ne vous ressemble pas du tout" des variables crea3, crea1, soc1, inf1, etc. -->
+L'axe 3 oppose les plutôt compétents (à gauche) aux plutôt pas compétents (à droite).
 
-<!-- * Axe 3 -->
-<!--   + contribution positive : les modalités "Cela vous ressemble assez peu" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, soc2, inf1, inf2, soc3, mob3, etc.  -->
-<!--   + contribution négative : les modalités "Cela vous ressemble plutôt bien" des variables crea3, mob2, mob1, crea1, ope4, soc4, etc. -->
+L'axe 4 oppose les très compétents créatifs (en haut et en particulier pour les compétences "savoir créer un site web" et "savoir programmer dans un langage informatique") aux moins compétents (en bas).
 
-<!-- * Axe 4 -->
-<!--   + contribution positive : les modalités "Cela vous ressemble beaucoup" des variables de compétences créatives. -->
-<!--   + contribution négative : les modalités "Cela vous ressemble plutôt bien" et "Cela vous ressemble assez peu" des variables de compétences créatives. -->
+
+```{r graph_MFA_modalite, fig.width=8, fig.height=6}
+
+# Modalités
+#--------------------
+# Représentation des modalités
+fviz_mfa_var(resMFA, "quali.var", axes=c(1,2), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3)
+fviz_mfa_var(resMFA, "quali.var", axes=c(2,3), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3)
+fviz_mfa_var(resMFA, "quali.var", axes=c(3,4), col.var="contrib", gradient.cols=c("#abd7d8","#E7B800","#9b0312"), repel=TRUE, labelsize=3)
+
+# Contributions des modalités aux 4 premières dimensions
+p1=fviz_contrib(resMFA, choice="quali.var", axes=1, top=20, palette="jco") + ggtitle("Dim 1")
+p2=fviz_contrib(resMFA, choice="quali.var", axes=2, top=20, palette="jco") + ggtitle("Dim 2")
+p3=fviz_contrib(resMFA, choice="quali.var", axes=3, top=20, palette="jco") + ggtitle("Dim 3")
+p4=fviz_contrib(resMFA, choice="quali.var", axes=4, top=20, palette="jco") + ggtitle("Dim 4")
+grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2)
+
+# Cos2 des modalités sur les 4 premières dimensions
+p1=fviz_cos2(resMFA, choice="quali.var", axes=1, top=20, palette="jco") + ggtitle("Dim 1")
+p2=fviz_cos2(resMFA, choice="quali.var", axes=2, top=20, palette="jco") + ggtitle("Dim 2")
+p3=fviz_cos2(resMFA, choice="quali.var", axes=3, top=20, palette="jco") + ggtitle("Dim 3")
+p4=fviz_cos2(resMFA, choice="quali.var", axes=4, top=20, palette="jco") + ggtitle("Dim 4")
+grid.arrange(p1,p2,p3,p4, ncol=2, nrow=2)
+
+```
+
+Une analyse plus détaillée des contributions des modalités des variables actives de l'AFM à la construction des premiers axes montre que :
+
+* Axe 1
+    + contribution positive : les modalités "Cela ne vous ressemble pas du tout" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, crea3, les 4 sociales, inf4, mob3, crea1, etc.
+    + contribution négative : les modalités "Cela vous ressemble beaucoup" des variables crea3, crea1, soc3, etc.
+
+* Axe 2
+    + contribution positive : les modalités "Cela vous ressemble plutôt bien" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, les 4 mobiles, soc3, soc2, inf4, inf1, etc.
+    + contribution négative : les modalités "Cela vous ressemble beaucoup" ou "Cela ne vous ressemble pas du tout" des variables crea3, crea1, soc1, inf1, etc.
+
+* Axe 3
+    + contribution positive : les modalités "Cela vous ressemble assez peu" de nombreuses variables parmi lesquelles les 4 compétences opérationnelles, soc2, inf1, inf2, soc3, mob3, etc.
+    + contribution négative : les modalités "Cela vous ressemble plutôt bien" des variables crea3, mob2, mob1, crea1, ope4, soc4, etc.
+
+* Axe 4
+    + contribution positive : les modalités "Cela vous ressemble beaucoup" des variables de compétences créatives.
+    + contribution négative : les modalités "Cela vous ressemble plutôt bien" et "Cela vous ressemble assez peu" des variables de compétences créatives.
 
 
 
