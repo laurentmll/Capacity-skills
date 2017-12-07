@@ -22,6 +22,8 @@ library(forcats)
 library(stringr)
 library(factoextra)
 library(gridExtra)
+library(grid)
+library(reshape2)
 ```
 
 On a un problème avec les individus qui ont répondu 'nsp','rdr' ou 'comprend.pas'. C'est un comportement "inhabituel" par rapport à la norme des réponses, qui va générer la création d'axes (dans les 1ers axes) dédiés à 'nsp','rdr' ou 'comprend.pas' et ensuite générer des classes autour de ces réponses et brouiller la classification.
@@ -89,6 +91,69 @@ skill=select(data, sexe, age_rec, etude, prof, csp, vie, revenu, statFam, nbFoye
 for(i in 1:21){
   levels(skill[,paste0("skills_",i)])=c("--","-","++","+","nsp","rdr","comprend.pas")
 }
+
+
+#-------------------------------------------------------------------
+# Graphique de TAP des 21 skills en barres empilées
+grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, position = c("bottom", "right")) {
+
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position="none"))
+  gl <- c(gl, ncol = ncol, nrow = nrow)
+
+  combined <- switch(position,
+                     "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                                            legend,
+                                            ncol = 1,
+                                            heights = unit.c(unit(1, "npc") - lheight, lheight)),
+                     "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                                           legend,
+                                           ncol = 2,
+                                           widths = unit.c(unit(1, "npc") - lwidth, lwidth)))
+
+  grid.newpage()
+  grid.draw(combined)
+
+  # return gtable invisibly
+  invisible(combined)
+
+}
+
+skill=select(skill, skills_1:skills_21,poids)
+tab1=apply(skill[,1:21],2,function(x) wtd.table(x,weights=skill$poids)) %>% melt
+tab1=tab1 %>% group_by(Var2) %>% mutate(sumSkill=sum(value),
+                                   percSkill=value/sum(value))
+
+tab1$Var1=factor(tab1$Var1, levels=rev(c("++","+","-","--","comprend.pas","nsp","rdr")))
+tab1=tab1 %>% arrange(Var2,Var1)
+tab1=tab1 %>% group_by(Var2) %>% mutate(cumPerc=cumsum(percSkill)-0.5*percSkill)
+tab1$Var1=factor(tab1$Var1, levels=c("++","+","-","--","comprend.pas","nsp","rdr"))
+tab1=tab1 %>% arrange(Var2,Var1)
+
+p=ggplot(tab1, aes(x=Var2,y=percSkill,fill=Var1)) + 
+  geom_bar(stat="identity") +
+  geom_text(aes(y=cumPerc,label=round(percSkill*100)), color="white", size=3.5) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_discrete(labels=1:21) +
+  scale_fill_manual(limits=c("++","+","-","--","comprend.pas","nsp","rdr"),
+                    labels=c("Beaucoup","Plutôt bien","Assez peu","Pas du tout","Ne comprend pas","Ne sait pas","Refus de répondre"),
+                    values=c("#168440","#7AB85C","#e8af5a","#bf4b24","#0f9ec6","#b03be2","#f2e63c")) +
+  labs(x="Compétences",y="",fill="Réponse", size=5) +
+  theme_minimal() + theme(legend.position="bottom", axis.title=element_text(size=13)) +
+  geom_vline(xintercept=c(4.5,9.5,13.5,17.5), linetype="dashed", colour="black", size=1)
+
+p + annotate("text",label=c("Opérationnelles","Informationnelles","Sociales","Créatives","Mobiles"),
+          y=rep(1.05,5), x=c(2.5,7,11.5,15.5,19.5), hjust=0.5, size=4.5)
+  
+
+#save(p1,p2,p3,p4,p5, file="plot_skill_desc_gp.Rdata") 
+grid_arrange_shared_legend(p1,p2,p3,p4,p5, ncol=3, nrow=2)
+#------------------------------------------------------------------
 
 
 # Le code de la 2ème solution
@@ -359,7 +424,12 @@ fviz_cluster(resHCPC, repel=FALSE, shape=16, ellipse=TRUE, geom="point",
              ggtheme=theme_minimal(), main="Factor map", axes=c(3,4)) +
   geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0, linetype="dotted")
 
-
+# 
+# fviz_cluster(resHCPC, repel=FALSE, shape=16, ellipse=TRUE, geom="point",
+#              ggtheme=theme_minimal(), main="Factor map") +
+#   geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0, linetype="dotted") +
+#   scale_fill_discrete(labels=c("Les experts","Les forts","Les utilitaristes","Les galériens","Les oubliés")) +
+#   theme(legend.position="bottom")
 
 # library(tibble)
 # a1=rownames_to_column(skillClust)
